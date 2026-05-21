@@ -1,1 +1,892 @@
-
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspaceName": {
+            "type": "string"
+        },
+        "location": {
+            "type": "string"
+        },
+        "enableDiagnosticPolicies": {
+            "type": "array",
+            "defaultValue": []
+        },
+        "excludeStorageResources": {
+            "type": "string",
+            "defaultValue": ""
+        }
+    },
+    "variables": {
+        "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+        "excludeStorageArray": "[if(empty(parameters('excludeStorageResources')), json('[]'), split(parameters('excludeStorageResources'), ','))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2021-04-01",
+            "name": "diagnosticPolicyDeployment",
+            "location": "[parameters('location')]",
+            "subscriptionId": "[subscription().subscriptionId]",
+            "properties": {
+                "mode": "Incremental",
+                "expressionEvaluationOptions": {
+                    "scope": "inner"
+                },
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "workspaceId": {
+                            "type": "string"
+                        },
+                        "location": {
+                            "type": "string"
+                        },
+                        "enableDiagnosticPolicies": {
+                            "type": "array"
+                        },
+                        "excludeStorageResources": {
+                            "type": "array"
+                        }
+                    },
+                    "variables": {
+                        "contributorRoleId": "b24988ac-6180-42a0-ab88-20f7382dd24c",
+                        "kvPolicyName": "[guid(subscription().id, 'SWX-sentinel-kv-diag-policy')]",
+                        "nsgPolicyName": "[guid(subscription().id, 'SWX-sentinel-nsg-diag-policy')]",
+                        "storagePolicyName": "[guid(subscription().id, 'SWX-sentinel-storage-diag-policy')]",
+                        "sqlPolicyName": "[guid(subscription().id, 'SWX-sentinel-sql-diag-policy')]",
+                        "kvAssignName": "[guid(subscription().id, 'SWX-sentinel-kv-diag-assign')]",
+                        "nsgAssignName": "[guid(subscription().id, 'SWX-sentinel-nsg-diag-assign')]",
+                        "storageAssignName": "[guid(subscription().id, 'SWXsentinel-storage-diag-assign')]",
+                        "sqlAssignName": "[guid(subscription().id, 'SWX-sentinel-sql-diag-assign')]"
+                    },
+                    "resources": [
+                        {
+                            "condition": "[contains(parameters('enableDiagnosticPolicies'), 'AzureKeyVault')]",
+                            "type": "Microsoft.Authorization/policyDefinitions",
+                            "apiVersion": "2021-06-01",
+                            "name": "[variables('kvPolicyName')]",
+                            "properties": {
+                                "displayName": "SWX Sentinel - Deploy diagnostic settings for Key Vault",
+                                "policyType": "Custom",
+                                "mode": "Indexed",
+                                "parameters": {
+                                    "workspaceId": {
+                                        "type": "String",
+                                        "metadata": {
+                                            "displayName": "Log Analytics workspace ID"
+                                        }
+                                    }
+                                },
+                                "policyRule": {
+                                    "if": {
+                                        "field": "type",
+                                        "equals": "Microsoft.KeyVault/vaults"
+                                    },
+                                    "then": {
+                                        "effect": "deployIfNotExists",
+                                        "details": {
+                                            "type": "Microsoft.Insights/diagnosticSettings",
+                                            "name": "sentinel-diagnostics",
+                                            "existenceCondition": {
+                                                "field": "Microsoft.Insights/diagnosticSettings/workspaceId",
+                                                "equals": "[[parameters('workspaceId')]"
+                                            },
+                                            "roleDefinitionIds": [
+                                                "/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"
+                                            ],
+                                            "deployment": {
+                                                "properties": {
+                                                    "mode": "incremental",
+                                                    "parameters": {
+                                                        "resourceId": {
+                                                            "value": "[[field('id')]"
+                                                        },
+                                                        "workspaceId": {
+                                                            "value": "[[parameters('workspaceId')]"
+                                                        }
+                                                    },
+                                                    "template": {
+                                                        "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                                                        "contentVersion": "1.0.0.0",
+                                                        "parameters": {
+                                                            "resourceId": {
+                                                                "type": "string"
+                                                            },
+                                                            "workspaceId": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "resources": [
+                                                            {
+                                                                "type": "Microsoft.Insights/diagnosticSettings",
+                                                                "apiVersion": "2021-05-01-preview",
+                                                                "name": "sentinel-diagnostics",
+                                                                "scope": "[[parameters('resourceId')]",
+                                                                "properties": {
+                                                                    "workspaceId": "[[parameters('workspaceId')]",
+                                                                    "logs": [
+                                                                        {
+                                                                            "category": "AuditEvent",
+                                                                            "enabled": true,
+                                                                            "retentionPolicy": {
+                                                                                "days": 0,
+                                                                                "enabled": false
+                                                                            }
+                                                                        }
+                                                                    ],
+                                                                    "metrics": []
+                                                                }
+                                                            }
+                                                        ]
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "condition": "[contains(parameters('enableDiagnosticPolicies'), 'AzureKeyVault')]",
+                            "type": "Microsoft.Authorization/policyAssignments",
+                            "apiVersion": "2022-06-01",
+                            "name": "[variables('kvAssignName')]",
+                            "location": "[parameters('location')]",
+                            "identity": {
+                                "type": "SystemAssigned"
+                            },
+                            "properties": {
+                                "displayName": "SWX Sentinel - Key Vault diagnostic settings",
+                                "policyDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', variables('kvPolicyName'))]",
+                                "parameters": {
+                                    "workspaceId": {
+                                        "value": "[parameters('workspaceId')]"
+                                    }
+                                }
+                            },
+                            "dependsOn": [
+                                "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', variables('kvPolicyName'))]"
+                            ]
+                        },
+                        {
+                            "condition": "[contains(parameters('enableDiagnosticPolicies'), 'AzureKeyVault')]",
+                            "type": "Microsoft.Authorization/roleAssignments",
+                            "apiVersion": "2022-04-01",
+                            "name": "[guid(variables('kvAssignName'), variables('contributorRoleId'))]",
+                            "properties": {
+                                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('contributorRoleId'))]",
+                                "principalId": "[reference(subscriptionResourceId('Microsoft.Authorization/policyAssignments', variables('kvAssignName')), '2022-06-01', 'Full').identity.principalId]",
+                                "principalType": "ServicePrincipal"
+                            },
+                            "dependsOn": [
+                                "[subscriptionResourceId('Microsoft.Authorization/policyAssignments', variables('kvAssignName'))]"
+                            ]
+                        },
+                        {
+                            "condition": "[contains(parameters('enableDiagnosticPolicies'), 'AzureKeyVault')]",
+                            "type": "Microsoft.PolicyInsights/remediations",
+                            "apiVersion": "2021-10-01",
+                            "name": "sentinel-kv-diag-remediation",
+                            "properties": {
+                                "policyAssignmentId": "[subscriptionResourceId('Microsoft.Authorization/policyAssignments', variables('kvAssignName'))]",
+                                "resourceDiscoveryMode": "ReEvaluateCompliance"
+                            },
+                            "dependsOn": [
+                                "[guid(variables('kvAssignName'), variables('contributorRoleId'))]"
+                            ]
+                        },
+                        {
+                            "condition": "[contains(parameters('enableDiagnosticPolicies'), 'AzureNetworkSecurityGroup')]",
+                            "type": "Microsoft.Authorization/policyDefinitions",
+                            "apiVersion": "2021-06-01",
+                            "name": "[variables('nsgPolicyName')]",
+                            "properties": {
+                                "displayName": "SWX Sentinel - Deploy diagnostic settings for NSG",
+                                "policyType": "Custom",
+                                "mode": "Indexed",
+                                "parameters": {
+                                    "workspaceId": {
+                                        "type": "String",
+                                        "metadata": {
+                                            "displayName": "Log Analytics workspace ID"
+                                        }
+                                    }
+                                },
+                                "policyRule": {
+                                    "if": {
+                                        "field": "type",
+                                        "equals": "Microsoft.Network/networkSecurityGroups"
+                                    },
+                                    "then": {
+                                        "effect": "deployIfNotExists",
+                                        "details": {
+                                            "type": "Microsoft.Insights/diagnosticSettings",
+                                            "name": "sentinel-diagnostics",
+                                            "existenceCondition": {
+                                                "field": "Microsoft.Insights/diagnosticSettings/workspaceId",
+                                                "equals": "[[parameters('workspaceId')]"
+                                            },
+                                            "roleDefinitionIds": [
+                                                "/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"
+                                            ],
+                                            "deployment": {
+                                                "properties": {
+                                                    "mode": "incremental",
+                                                    "parameters": {
+                                                        "resourceId": {
+                                                            "value": "[[field('id')]"
+                                                        },
+                                                        "workspaceId": {
+                                                            "value": "[[parameters('workspaceId')]"
+                                                        }
+                                                    },
+                                                    "template": {
+                                                        "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                                                        "contentVersion": "1.0.0.0",
+                                                        "parameters": {
+                                                            "resourceId": {
+                                                                "type": "string"
+                                                            },
+                                                            "workspaceId": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "resources": [
+                                                            {
+                                                                "type": "Microsoft.Insights/diagnosticSettings",
+                                                                "apiVersion": "2021-05-01-preview",
+                                                                "name": "sentinel-diagnostics",
+                                                                "scope": "[[parameters('resourceId')]",
+                                                                "properties": {
+                                                                    "workspaceId": "[[parameters('workspaceId')]",
+                                                                    "logs": [
+                                                                        {
+                                                                            "category": "NetworkSecurityGroupEvent",
+                                                                            "enabled": true,
+                                                                            "retentionPolicy": {
+                                                                                "days": 0,
+                                                                                "enabled": false
+                                                                            }
+                                                                        },
+                                                                        {
+                                                                            "category": "NetworkSecurityGroupRuleCounter",
+                                                                            "enabled": true,
+                                                                            "retentionPolicy": {
+                                                                                "days": 0,
+                                                                                "enabled": false
+                                                                            }
+                                                                        }
+                                                                    ],
+                                                                    "metrics": []
+                                                                }
+                                                            }
+                                                        ]
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "condition": "[contains(parameters('enableDiagnosticPolicies'), 'AzureNetworkSecurityGroup')]",
+                            "type": "Microsoft.Authorization/policyAssignments",
+                            "apiVersion": "2022-06-01",
+                            "name": "[variables('nsgAssignName')]",
+                            "location": "[parameters('location')]",
+                            "identity": {
+                                "type": "SystemAssigned"
+                            },
+                            "properties": {
+                                "displayName": "SWX Sentinel - NSG diagnostic settings",
+                                "policyDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', variables('nsgPolicyName'))]",
+                                "parameters": {
+                                    "workspaceId": {
+                                        "value": "[parameters('workspaceId')]"
+                                    }
+                                }
+                            },
+                            "dependsOn": [
+                                "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', variables('nsgPolicyName'))]"
+                            ]
+                        },
+                        {
+                            "condition": "[contains(parameters('enableDiagnosticPolicies'), 'AzureNetworkSecurityGroup')]",
+                            "type": "Microsoft.Authorization/roleAssignments",
+                            "apiVersion": "2022-04-01",
+                            "name": "[guid(variables('nsgAssignName'), variables('contributorRoleId'))]",
+                            "properties": {
+                                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('contributorRoleId'))]",
+                                "principalId": "[reference(subscriptionResourceId('Microsoft.Authorization/policyAssignments', variables('nsgAssignName')), '2022-06-01', 'Full').identity.principalId]",
+                                "principalType": "ServicePrincipal"
+                            },
+                            "dependsOn": [
+                                "[subscriptionResourceId('Microsoft.Authorization/policyAssignments', variables('nsgAssignName'))]"
+                            ]
+                        },
+                        {
+                            "condition": "[contains(parameters('enableDiagnosticPolicies'), 'AzureNetworkSecurityGroup')]",
+                            "type": "Microsoft.PolicyInsights/remediations",
+                            "apiVersion": "2021-10-01",
+                            "name": "sentinel-nsg-diag-remediation",
+                            "properties": {
+                                "policyAssignmentId": "[subscriptionResourceId('Microsoft.Authorization/policyAssignments', variables('nsgAssignName'))]",
+                                "resourceDiscoveryMode": "ReEvaluateCompliance"
+                            },
+                            "dependsOn": [
+                                "[guid(variables('nsgAssignName'), variables('contributorRoleId'))]"
+                            ]
+                        },
+                        {
+                            "condition": "[contains(parameters('enableDiagnosticPolicies'), 'AzureStorageAccount')]",
+                            "type": "Microsoft.Authorization/policyDefinitions",
+                            "apiVersion": "2021-06-01",
+                            "name": "[variables('storagePolicyName')]",
+                            "properties": {
+                                "displayName": "SWX Sentinel - Deploy diagnostic settings for Storage Account",
+                                "policyType": "Custom",
+                                "mode": "Indexed",
+                                "parameters": {
+                                    "workspaceId": {
+                                        "type": "String",
+                                        "metadata": {
+                                            "displayName": "Log Analytics workspace ID"
+                                        }
+                                    }
+                                },
+                                "policyRule": {
+                                    "if": {
+                                        "field": "type",
+                                        "equals": "Microsoft.Storage/storageAccounts"
+                                    },
+                                    "then": {
+                                        "effect": "deployIfNotExists",
+                                        "details": {
+                                            "type": "Microsoft.Insights/diagnosticSettings",
+                                            "name": "sentinel-diagnostics",
+                                            "existenceCondition": {
+                                                "field": "Microsoft.Insights/diagnosticSettings/workspaceId",
+                                                "equals": "[[parameters('workspaceId')]"
+                                            },
+                                            "roleDefinitionIds": [
+                                                "/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"
+                                            ],
+                                            "deployment": {
+                                                "properties": {
+                                                    "mode": "incremental",
+                                                    "parameters": {
+                                                        "resourceId": {
+                                                            "value": "[[field('id')]"
+                                                        },
+                                                        "workspaceId": {
+                                                            "value": "[[parameters('workspaceId')]"
+                                                        }
+                                                    },
+                                                    "template": {
+                                                        "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                                                        "contentVersion": "1.0.0.0",
+                                                        "parameters": {
+                                                            "resourceId": {
+                                                                "type": "string"
+                                                            },
+                                                            "workspaceId": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "resources": [
+                                                            {
+                                                                "type": "Microsoft.Insights/diagnosticSettings",
+                                                                "apiVersion": "2021-05-01-preview",
+                                                                "name": "sentinel-diagnostics",
+                                                                "scope": "[[parameters('resourceId')]",
+                                                                "properties": {
+                                                                    "workspaceId": "[[parameters('workspaceId')]",
+                                                                    "logs": [],
+                                                                    "metrics": [
+                                                                        {
+                                                                            "category": "Transaction",
+                                                                            "enabled": true,
+                                                                            "retentionPolicy": {
+                                                                                "days": 0,
+                                                                                "enabled": false
+                                                                            }
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            },
+                                                            {
+                                                                "type": "Microsoft.Insights/diagnosticSettings",
+                                                                "apiVersion": "2021-05-01-preview",
+                                                                "name": "sentinel-diagnostics",
+                                                                "scope": "[[concat(parameters('resourceId'), '/blobServices/default')]",
+                                                                "properties": {
+                                                                    "workspaceId": "[[parameters('workspaceId')]",
+                                                                    "logs": [
+                                                                        {
+                                                                            "category": "StorageRead",
+                                                                            "enabled": true,
+                                                                            "retentionPolicy": {
+                                                                                "days": 0,
+                                                                                "enabled": false
+                                                                            }
+                                                                        },
+                                                                        {
+                                                                            "category": "StorageWrite",
+                                                                            "enabled": true,
+                                                                            "retentionPolicy": {
+                                                                                "days": 0,
+                                                                                "enabled": false
+                                                                            }
+                                                                        },
+                                                                        {
+                                                                            "category": "StorageDelete",
+                                                                            "enabled": true,
+                                                                            "retentionPolicy": {
+                                                                                "days": 0,
+                                                                                "enabled": false
+                                                                            }
+                                                                        }
+                                                                    ],
+                                                                    "metrics": []
+                                                                }
+                                                            },
+                                                            {
+                                                                "type": "Microsoft.Insights/diagnosticSettings",
+                                                                "apiVersion": "2021-05-01-preview",
+                                                                "name": "sentinel-diagnostics",
+                                                                "scope": "[[concat(parameters('resourceId'), '/queueServices/default')]",
+                                                                "properties": {
+                                                                    "workspaceId": "[[parameters('workspaceId')]",
+                                                                    "logs": [
+                                                                        {
+                                                                            "category": "StorageRead",
+                                                                            "enabled": true,
+                                                                            "retentionPolicy": {
+                                                                                "days": 0,
+                                                                                "enabled": false
+                                                                            }
+                                                                        },
+                                                                        {
+                                                                            "category": "StorageWrite",
+                                                                            "enabled": true,
+                                                                            "retentionPolicy": {
+                                                                                "days": 0,
+                                                                                "enabled": false
+                                                                            }
+                                                                        },
+                                                                        {
+                                                                            "category": "StorageDelete",
+                                                                            "enabled": true,
+                                                                            "retentionPolicy": {
+                                                                                "days": 0,
+                                                                                "enabled": false
+                                                                            }
+                                                                        }
+                                                                    ],
+                                                                    "metrics": []
+                                                                }
+                                                            },
+                                                            {
+                                                                "type": "Microsoft.Insights/diagnosticSettings",
+                                                                "apiVersion": "2021-05-01-preview",
+                                                                "name": "sentinel-diagnostics",
+                                                                "scope": "[[concat(parameters('resourceId'), '/tableServices/default')]",
+                                                                "properties": {
+                                                                    "workspaceId": "[[parameters('workspaceId')]",
+                                                                    "logs": [
+                                                                        {
+                                                                            "category": "StorageRead",
+                                                                            "enabled": true,
+                                                                            "retentionPolicy": {
+                                                                                "days": 0,
+                                                                                "enabled": false
+                                                                            }
+                                                                        },
+                                                                        {
+                                                                            "category": "StorageWrite",
+                                                                            "enabled": true,
+                                                                            "retentionPolicy": {
+                                                                                "days": 0,
+                                                                                "enabled": false
+                                                                            }
+                                                                        },
+                                                                        {
+                                                                            "category": "StorageDelete",
+                                                                            "enabled": true,
+                                                                            "retentionPolicy": {
+                                                                                "days": 0,
+                                                                                "enabled": false
+                                                                            }
+                                                                        }
+                                                                    ],
+                                                                    "metrics": []
+                                                                }
+                                                            },
+                                                            {
+                                                                "type": "Microsoft.Insights/diagnosticSettings",
+                                                                "apiVersion": "2021-05-01-preview",
+                                                                "name": "sentinel-diagnostics",
+                                                                "scope": "[[concat(parameters('resourceId'), '/fileServices/default')]",
+                                                                "properties": {
+                                                                    "workspaceId": "[[parameters('workspaceId')]",
+                                                                    "logs": [
+                                                                        {
+                                                                            "category": "StorageRead",
+                                                                            "enabled": true,
+                                                                            "retentionPolicy": {
+                                                                                "days": 0,
+                                                                                "enabled": false
+                                                                            }
+                                                                        },
+                                                                        {
+                                                                            "category": "StorageWrite",
+                                                                            "enabled": true,
+                                                                            "retentionPolicy": {
+                                                                                "days": 0,
+                                                                                "enabled": false
+                                                                            }
+                                                                        },
+                                                                        {
+                                                                            "category": "StorageDelete",
+                                                                            "enabled": true,
+                                                                            "retentionPolicy": {
+                                                                                "days": 0,
+                                                                                "enabled": false
+                                                                            }
+                                                                        }
+                                                                    ],
+                                                                    "metrics": []
+                                                                }
+                                                            }
+                                                        ]
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "condition": "[contains(parameters('enableDiagnosticPolicies'), 'AzureStorageAccount')]",
+                            "type": "Microsoft.Resources/deployments",
+                            "apiVersion": "2021-04-01",
+                            "name": "storageAssignmentDeployment",
+                            "location": "[parameters('location')]",
+                            "properties": {
+                                "mode": "Incremental",
+                                "expressionEvaluationOptions": {
+                                    "scope": "inner"
+                                },
+                                "template": {
+                                    "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+                                    "contentVersion": "1.0.0.0",
+                                    "parameters": {
+                                        "workspaceId": {
+                                            "type": "string"
+                                        },
+                                        "location": {
+                                            "type": "string"
+                                        },
+                                        "storagePolicyName": {
+                                            "type": "string"
+                                        },
+                                        "storageAssignName": {
+                                            "type": "string"
+                                        },
+                                        "excludeStorageResources": {
+                                            "type": "array"
+                                        }
+                                    },
+                                    "variables": {
+                                        "copy": [
+                                            {
+                                                "name": "notScopesArray",
+                                                "count": "[length(parameters('excludeStorageResources'))]",
+                                                "input": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', split(parameters('excludeStorageResources')[copyIndex('notScopesArray')], '/')[0], '/providers/Microsoft.Storage/storageAccounts/', split(parameters('excludeStorageResources')[copyIndex('notScopesArray')], '/')[1])]"
+                                            }
+                                        ]
+                                    },
+                                    "resources": [
+                                        {
+                                            "type": "Microsoft.Authorization/policyAssignments",
+                                            "apiVersion": "2022-06-01",
+                                            "name": "[parameters('storageAssignName')]",
+                                            "location": "[parameters('location')]",
+                                            "identity": {
+                                                "type": "SystemAssigned"
+                                            },
+                                            "properties": {
+                                                "displayName": "SWX Sentinel - Storage Account diagnostic settings",
+                                                "policyDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', parameters('storagePolicyName'))]",
+                                                "parameters": {
+                                                    "workspaceId": {
+                                                        "value": "[parameters('workspaceId')]"
+                                                    }
+                                                },
+                                                "notScopes": "[if(empty(parameters('excludeStorageResources')), json('[]'), variables('notScopesArray'))]"
+                                            }
+                                        }
+                                    ],
+                                    "outputs": {
+                                        "principalId": {
+                                            "type": "string",
+                                            "value": "[reference(subscriptionResourceId('Microsoft.Authorization/policyAssignments', parameters('storageAssignName')), '2022-06-01', 'Full').identity.principalId]"
+                                        }
+                                    }
+                                },
+                                "parameters": {
+                                    "workspaceId": {
+                                        "value": "[parameters('workspaceId')]"
+                                    },
+                                    "location": {
+                                        "value": "[parameters('location')]"
+                                    },
+                                    "storagePolicyName": {
+                                        "value": "[variables('storagePolicyName')]"
+                                    },
+                                    "storageAssignName": {
+                                        "value": "[variables('storageAssignName')]"
+                                    },
+                                    "excludeStorageResources": {
+                                        "value": "[parameters('excludeStorageResources')]"
+                                    }
+                                }
+                            },
+                            "dependsOn": [
+                                "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', variables('storagePolicyName'))]"
+                            ]
+                        },
+                        {
+                            "condition": "[contains(parameters('enableDiagnosticPolicies'), 'AzureStorageAccount')]",
+                            "type": "Microsoft.Authorization/roleAssignments",
+                            "apiVersion": "2022-04-01",
+                            "name": "[guid(variables('storageAssignName'), variables('contributorRoleId'))]",
+                            "properties": {
+                                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('contributorRoleId'))]",
+                                "principalId": "[reference('storageAssignmentDeployment').outputs.principalId.value]",
+                                "principalType": "ServicePrincipal"
+                            },
+                            "dependsOn": [
+                                "storageAssignmentDeployment"
+                            ]
+                        },
+                        {
+                            "condition": "[contains(parameters('enableDiagnosticPolicies'), 'AzureStorageAccount')]",
+                            "type": "Microsoft.PolicyInsights/remediations",
+                            "apiVersion": "2021-10-01",
+                            "name": "sentinel-storage-diag-remediation",
+                            "properties": {
+                                "policyAssignmentId": "[subscriptionResourceId('Microsoft.Authorization/policyAssignments', variables('storageAssignName'))]",
+                                "resourceDiscoveryMode": "ReEvaluateCompliance"
+                            },
+                            "dependsOn": [
+                                "[guid(variables('storageAssignName'), variables('contributorRoleId'))]"
+                            ]
+                        },
+                        {
+                            "condition": "[contains(parameters('enableDiagnosticPolicies'), 'AzureSqlDatabase')]",
+                            "type": "Microsoft.Authorization/policyDefinitions",
+                            "apiVersion": "2021-06-01",
+                            "name": "[variables('sqlPolicyName')]",
+                            "properties": {
+                                "displayName": "SWX Sentinel - Deploy diagnostic settings for SQL Database",
+                                "policyType": "Custom",
+                                "mode": "Indexed",
+                                "parameters": {
+                                    "workspaceId": {
+                                        "type": "String",
+                                        "metadata": {
+                                            "displayName": "Log Analytics workspace ID"
+                                        }
+                                    }
+                                },
+                                "policyRule": {
+                                    "if": {
+                                        "allOf": [
+                                            {
+                                                "field": "type",
+                                                "equals": "Microsoft.Sql/servers/databases"
+                                            },
+                                            {
+                                                "field": "name",
+                                                "notEquals": "master"
+                                            }
+                                        ]
+                                    },
+                                    "then": {
+                                        "effect": "deployIfNotExists",
+                                        "details": {
+                                            "type": "Microsoft.Insights/diagnosticSettings",
+                                            "name": "sentinel-diagnostics",
+                                            "existenceCondition": {
+                                                "field": "Microsoft.Insights/diagnosticSettings/workspaceId",
+                                                "equals": "[[parameters('workspaceId')]"
+                                            },
+                                            "roleDefinitionIds": [
+                                                "/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"
+                                            ],
+                                            "deployment": {
+                                                "properties": {
+                                                    "mode": "incremental",
+                                                    "parameters": {
+                                                        "resourceId": {
+                                                            "value": "[[field('id')]"
+                                                        },
+                                                        "workspaceId": {
+                                                            "value": "[[parameters('workspaceId')]"
+                                                        }
+                                                    },
+                                                    "template": {
+                                                        "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                                                        "contentVersion": "1.0.0.0",
+                                                        "parameters": {
+                                                            "resourceId": {
+                                                                "type": "string"
+                                                            },
+                                                            "workspaceId": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "resources": [
+                                                            {
+                                                                "type": "Microsoft.Insights/diagnosticSettings",
+                                                                "apiVersion": "2021-05-01-preview",
+                                                                "name": "sentinel-diagnostics",
+                                                                "scope": "[[parameters('resourceId')]",
+                                                                "properties": {
+                                                                    "workspaceId": "[[parameters('workspaceId')]",
+                                                                    "logs": [
+                                                                        {
+                                                                            "category": "SQLSecurityAuditEvents",
+                                                                            "enabled": true,
+                                                                            "retentionPolicy": {
+                                                                                "days": 0,
+                                                                                "enabled": false
+                                                                            }
+                                                                        },
+                                                                        {
+                                                                            "category": "SQLInsights",
+                                                                            "enabled": true,
+                                                                            "retentionPolicy": {
+                                                                                "days": 0,
+                                                                                "enabled": false
+                                                                            }
+                                                                        },
+                                                                        {
+                                                                            "category": "Errors",
+                                                                            "enabled": true,
+                                                                            "retentionPolicy": {
+                                                                                "days": 0,
+                                                                                "enabled": false
+                                                                            }
+                                                                        },
+                                                                        {
+                                                                            "category": "Timeouts",
+                                                                            "enabled": true,
+                                                                            "retentionPolicy": {
+                                                                                "days": 0,
+                                                                                "enabled": false
+                                                                            }
+                                                                        },
+                                                                        {
+                                                                            "category": "Blocks",
+                                                                            "enabled": true,
+                                                                            "retentionPolicy": {
+                                                                                "days": 0,
+                                                                                "enabled": false
+                                                                            }
+                                                                        },
+                                                                        {
+                                                                            "category": "Deadlocks",
+                                                                            "enabled": true,
+                                                                            "retentionPolicy": {
+                                                                                "days": 0,
+                                                                                "enabled": false
+                                                                            }
+                                                                        }
+                                                                    ],
+                                                                    "metrics": []
+                                                                }
+                                                            }
+                                                        ]
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "condition": "[contains(parameters('enableDiagnosticPolicies'), 'AzureSqlDatabase')]",
+                            "type": "Microsoft.Authorization/policyAssignments",
+                            "apiVersion": "2022-06-01",
+                            "name": "[variables('sqlAssignName')]",
+                            "location": "[parameters('location')]",
+                            "identity": {
+                                "type": "SystemAssigned"
+                            },
+                            "properties": {
+                                "displayName": "SWX Sentinel - SQL Database diagnostic settings",
+                                "policyDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', variables('sqlPolicyName'))]",
+                                "parameters": {
+                                    "workspaceId": {
+                                        "value": "[parameters('workspaceId')]"
+                                    }
+                                }
+                            },
+                            "dependsOn": [
+                                "[subscriptionResourceId('Microsoft.Authorization/policyDefinitions', variables('sqlPolicyName'))]"
+                            ]
+                        },
+                        {
+                            "condition": "[contains(parameters('enableDiagnosticPolicies'), 'AzureSqlDatabase')]",
+                            "type": "Microsoft.Authorization/roleAssignments",
+                            "apiVersion": "2022-04-01",
+                            "name": "[guid(variables('sqlAssignName'), variables('contributorRoleId'))]",
+                            "properties": {
+                                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('contributorRoleId'))]",
+                                "principalId": "[reference(subscriptionResourceId('Microsoft.Authorization/policyAssignments', variables('sqlAssignName')), '2022-06-01', 'Full').identity.principalId]",
+                                "principalType": "ServicePrincipal"
+                            },
+                            "dependsOn": [
+                                "[subscriptionResourceId('Microsoft.Authorization/policyAssignments', variables('sqlAssignName'))]"
+                            ]
+                        },
+                        {
+                            "condition": "[contains(parameters('enableDiagnosticPolicies'), 'AzureSqlDatabase')]",
+                            "type": "Microsoft.PolicyInsights/remediations",
+                            "apiVersion": "2021-10-01",
+                            "name": "sentinel-sql-diag-remediation",
+                            "properties": {
+                                "policyAssignmentId": "[subscriptionResourceId('Microsoft.Authorization/policyAssignments', variables('sqlAssignName'))]",
+                                "resourceDiscoveryMode": "ReEvaluateCompliance"
+                            },
+                            "dependsOn": [
+                                "[guid(variables('sqlAssignName'), variables('contributorRoleId'))]"
+                            ]
+                        }
+                    ]
+                },
+                "parameters": {
+                    "workspaceId": {
+                        "value": "[variables('workspaceId')]"
+                    },
+                    "location": {
+                        "value": "[parameters('location')]"
+                    },
+                    "enableDiagnosticPolicies": {
+                        "value": "[parameters('enableDiagnosticPolicies')]"
+                    },
+                    "excludeStorageResources": {
+                        "value": "[variables('excludeStorageArray')]"
+                    }
+                }
+            }
+        }
+    ]
+}
